@@ -1,144 +1,135 @@
-Auth module chịu trách nhiệm:
+# Auth Module
 
-Xác thực người dùng
+## 1. Purpose
 
-Đăng nhập username/password
+Auth module chịu trách nhiệm xác thực và quản lý phiên đăng nhập:
 
-Social login (Google / Facebook / Apple)
+- Username / Password authentication
+- Social login (Google, Facebook, Apple)
+- Access Token (JWT) issuance
+- Refresh Token rotation
+- Session revoke / logout
+- JWT validation middleware
 
-Phát hành Access Token & Refresh Token
+Auth không quản lý business logic người dùng và không thao tác trực tiếp bảng `users`.
 
-Refresh rotation & revoke session
+---
 
-Validate JWT cho API
+## 2. Responsibilities
 
-Auth không quản lý profile user, không xử lý business logic tài khoản.
+### Included
 
-🧩 Phạm vi trách nhiệm
-Thuộc Auth
+- Login
+- Refresh token
+- Logout / Logout all
+- OAuth redirect & callback
+- Token issuance & verification
+- Refresh token storage (DB)
+- Refresh rotation & reuse detection
+- Access token middleware validation
 
-Login
+### Excluded
 
-Refresh token
+- User profile management
+- Account lifecycle (disable/enable)
+- Username/email uniqueness rules
+- Provider linking business rules
 
-Logout / Logout-all
+---
 
-OAuth redirect + callback
+## 3. Module Structure
 
-Issue & verify JWT
+- Auth/
+- Controllers/
+- Services/
+- OAuth/
+- Repositories/
+- Domain/
+- Middleware/
+- Routes/
+- ModuleProviders/
+- Database/
+- Config/
 
-Session store (refresh token DB)
+---
 
-Middleware xác thực access token
+## 4. Token Design
 
-Không thuộc Auth
+### Access Token
 
-Update profile
-
-Account lifecycle (disable, activate)
-
-Username/email uniqueness rules
-
-Provider linking business rule
-
-📂 Cấu trúc thư mục
-Auth/
-  Controllers/
-  Services/
-  OAuth/
-  Repositories/
-  Domain/
-  Middleware/
-  Routes/
-  ModuleProviders/
-  Database/
-🔐 Token Strategy
-Access Token
-
-JWT
-
-TTL: 10–15 phút
-
-Gửi qua:
+- Format: JWT
+- TTL: 10–15 minutes
+- Transport:
 
 Authorization: Bearer <access_token>
-Refresh Token
 
-TTL: 7–30 ngày
+### Refresh Token
 
-Lưu hash trong bảng refresh_tokens
+- TTL: 7–30 days
+- Stored hashed in `refresh_tokens` table
+- Rotated on every refresh
+- Revoked on logout
+- Reuse detection recommended
 
-Rotation mỗi lần refresh
+---
 
-Revoke khi logout
+## 5. Core Flows
 
-🔄 Luồng xử lý
-1️⃣ Login bằng password
+### Password Login
 
-AuthService nhận request
+1. Receive credentials
+2. Call CredentialVerifierContract
+3. Validate account status via AccountReaderContract
+4. Issue access + refresh token
+5. Persist refresh session
 
-Gọi AccountContract để verify identity
+---
 
-TokenService issue access + refresh
+### Social Login
 
-SessionService lưu refresh token hash
+1. Redirect to provider
+2. Receive provider callback
+3. Convert to ProviderIdentityDTO
+4. Call AccountIdentityResolverContract
+5. Issue token pair
 
-2️⃣ Social Login
+---
 
-OAuthController → redirect provider
+### Refresh
 
-Callback → OAuthService
+1. Validate refresh token
+2. Check revoked / expired
+3. Rotate token
+4. Issue new access token
 
-Provider adapter trả về ProviderIdentityDTO
+---
 
-Gọi AccountIdentityResolverContract
+## 6. Contracts Used
 
-Issue token pair
+Auth depends on:
 
-3️⃣ Refresh
+- AccountIdentityResolverContract
+- AccountReaderContract
+- CredentialVerifierContract (optional)
+- SessionRevokerContract (optional)
 
-Validate refresh token
+Auth does not access Account database directly.
 
-Kiểm tra revoked
+---
 
-Revoke token cũ
+## 7. Error Codes
 
-Issue token mới
+### Auth Errors
 
-🔌 Contract phụ thuộc vào Account
+- AUTH_INVALID_CREDENTIALS
+- AUTH_TOKEN_INVALID
+- AUTH_TOKEN_EXPIRED
+- AUTH_REFRESH_REVOKED
+- AUTH_REFRESH_REUSE_DETECTED
+- OAUTH_STATE_MISMATCH
+- OAUTH_PROVIDER_ERROR
 
-Auth sử dụng các interface sau:
-
-AccountIdentityResolverContract
-
-AccountReaderContract
-
-(Optional) CredentialVerifierContract
-
-(Optional) SessionRevokerContract
-
-Auth không truy cập trực tiếp bảng users.
-
-🚨 Exception Codes
-Auth Errors
-
-AUTH_INVALID_CREDENTIALS
-
-AUTH_TOKEN_EXPIRED
-
-AUTH_TOKEN_INVALID
-
-AUTH_REFRESH_REVOKED
-
-AUTH_REFRESH_REUSE_DETECTED
-
-OAuth Errors
-
-OAUTH_STATE_MISMATCH
-
-OAUTH_PROVIDER_ERROR
-
-Tất cả trả về JSON chuẩn:
+### Error Response Format
 
 {
   "error": {
@@ -146,14 +137,26 @@ Tất cả trả về JSON chuẩn:
     "message": "Invalid credentials"
   }
 }
-🧱 Sẵn sàng Microservice
 
-Để tách thành service riêng:
+---
 
-Thay binding AccountContract → HTTP client
+## 8. Microservice Readiness
 
-Giữ nguyên TokenService
+To extract Auth as a standalone service:
 
-Giữ nguyên error contract
+- Replace Account contracts with HTTP client implementation
+- Keep TokenService unchanged
+- Preserve error code contract
+- No DB coupling to Account module
 
-Không cần đổi business logic nội bộ.
+---
+
+## 9. Security Requirements
+
+- Short-lived access token
+- Hashed refresh token storage
+- Rotation on refresh
+- Logout revokes session
+- OAuth state validation
+- HTTPS required in production
+- Rate limit login endpoints

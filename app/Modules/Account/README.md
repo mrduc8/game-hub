@@ -1,153 +1,154 @@
-🎯 Mục tiêu
+# Account Module
 
-Account module quản lý:
+## 1. Purpose
 
-User domain
+Account module quản lý domain người dùng:
 
-Tạo tài khoản
-
-Hồ sơ cá nhân
-
-Provider linking rules
-
-Trạng thái account (active/disabled)
-
-Username/email uniqueness
+- Account creation
+- Profile management
+- Account status control
+- Password policy & hashing
+- Provider linking rules
+- Identity resolution
 
 Account không phát hành token và không xử lý session.
 
-🧩 Phạm vi trách nhiệm
-Thuộc Account
+---
 
-Register user
+## 2. Responsibilities
 
-Update profile
+### Included
 
-Disable/enable account
+- Register account
+- Update profile
+- Enable / disable account
+- Resolve identity from provider
+- Link / unlink provider
+- Verify password
+- Enforce uniqueness rules
 
-Resolve user từ provider identity
+### Excluded
 
-Link/unlink provider
+- JWT issuance
+- Refresh token handling
+- OAuth redirect
+- Session storage
+- Token validation middleware
 
-Không thuộc Account
+---
 
-JWT
+## 3. Module Structure
+- Account/
+- Controllers/
+- Services/
+- Repositories/
+- Domain/
+- Routes/
+- ModuleProviders/
+- Database/
+- Config/
 
-Refresh token
+---
 
-OAuth redirect
+## 4. Domain Models
 
-Token validation middleware
+### Users
 
-📂 Cấu trúc thư mục
-Account/
-  Controllers/
-  Services/
-  Repositories/
-  Domain/
-  Routes/
-  ModuleProviders/
-  Database/
-👤 Domain Models
-Users
+- id
+- username
+- email
+- password_hash
+- status
+- timestamps
 
-id
+### User Providers
 
-username
+- user_id
+- provider
+- provider_user_id
+- created_at
 
-email
+---
 
-password_hash
-
-status
-
-timestamps
-
-User Providers
-
-user_id
-
-provider (google/facebook/apple)
-
-provider_user_id
-
-created_at
-
-🔄 Identity Resolution Flow
+## 5. Identity Resolution Flow
 
 resolveFromProvider(ProviderIdentityDTO)
 
-Quy tắc:
+Rule order:
 
-Tìm theo provider_user_id
+1. Match by provider_user_id
+2. If not found → match by email (policy-based)
+3. If still not found → create new account
+4. Return:
 
-Nếu chưa có:
+- userId
+- created (bool)
+- linked (bool)
+- status
 
-Match email (nếu policy cho phép)
+Auth uses this result to issue tokens.
 
-Nếu chưa tồn tại:
+---
 
-Tạo user mới
+## 6. Password Handling
 
-Trả về:
+- Hash with bcrypt or argon2
+- Enforce password policy
+- Provide verification through CredentialVerifierContract
 
-userId
+Auth does not hash or store password directly.
 
-created (bool)
+---
 
-linked (bool)
+## 7. Error Codes
 
-status
+### Account Errors
 
-Auth sẽ dựa vào kết quả này để issue token.
+- ACCOUNT_NOT_FOUND
+- ACCOUNT_DISABLED
+- ACCOUNT_USERNAME_EXISTS
+- ACCOUNT_EMAIL_EXISTS
+- ACCOUNT_PROVIDER_CONFLICT
 
-🔐 Password Handling
+### Error Response Format
 
-Password policy & hash logic nằm trong Account.
+{
+  "error": {
+    "code": "ACCOUNT_DISABLED",
+    "message": "Account is disabled"
+  }
+}
 
-Hash bằng bcrypt/argon2
+---
 
-Verify password khi Auth gọi qua contract
+## 8. Contracts Exposed
 
-🚨 Exception Codes
-Account Errors
+Account provides:
 
-ACCOUNT_DISABLED
+- AccountReaderContract
+- AccountIdentityResolverContract
+- CredentialVerifierContract
 
-ACCOUNT_NOT_FOUND
+Only DTO objects cross module boundary.
 
-ACCOUNT_USERNAME_EXISTS
+---
 
-ACCOUNT_EMAIL_EXISTS
+## 9. Microservice Readiness
 
-ACCOUNT_PROVIDER_CONFLICT
+To extract Account as standalone service:
 
-Tất cả lỗi phải throw DomainException với:
+- Expose REST/gRPC matching contract
+- Preserve DTO schema
+- Preserve error codes
+- No change required in Auth business logic
 
-errorCode
+---
 
-httpStatus
+## 10. Design Principles
 
-publicMessage
-
-🔌 Contract cung cấp cho Auth
-
-Account expose:
-
-AccountReaderContract
-
-AccountIdentityResolverContract
-
-(Optional) CredentialVerifierContract
-
-Không expose Eloquent model ra ngoài module.
-
-🧱 Sẵn sàng Microservice
-
-Để tách thành service riêng:
-
-Expose REST API theo contract
-
-Giữ nguyên DTO & error code
-
-Auth module chỉ thay implementation binding
+- Domain-driven separation
+- Clear module boundaries
+- Contract-based interaction
+- No cross-module DB access
+- Standardized error handling
+- Production-ready architecture
